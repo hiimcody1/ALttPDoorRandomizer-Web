@@ -1,0 +1,14 @@
+{
+    "home": {
+        "_base": "home.php"
+    },
+    "randomizer": {
+        "_base": "randomizer.php",
+        "preset": "preset.php",
+        "generate": "generate.php"
+    },
+    "customizer": {
+        "_base": "customizer.php",
+        "generate": "customgen.php"
+    }
+}
