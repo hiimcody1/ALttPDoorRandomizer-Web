@@ -4,7 +4,7 @@
  * File Created: Saturday, 6th August 2022 8:36:11 pm
  * Author: hiimcody1
  * 
- * Last Modified: Wednesday, 9th November 2022 7:30:24 pm
+ * Last Modified: Tuesday, 24th January 2023 1:15:16 pm
  * Modified By: hiimcody1
  * 
  * License: MIT License http://www.opensource.org/licenses/MIT
@@ -19,7 +19,10 @@ require("classes/class.ui.php");
 
 ///*
 $UI = new UI();
-$UI->Render($UI->GetRoute($_GET['view']));
+if(isset($_GET['view']))
+    $UI->Render($UI->GetRoute($_GET['view']));
+else
+    $UI->Render($UI->GetRoute(""));
 
 
 echo $Template->render("base.php");
