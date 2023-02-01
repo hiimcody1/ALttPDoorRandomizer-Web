@@ -4,7 +4,7 @@
  * File Created: Saturday, 9th July 2022 8:36:55 pm
  * Author: hiimcody1
  * 
- * Last Modified: Monday, 8th August 2022 3:57:16 am
+ * Last Modified: Wednesday, 1st February 2023 3:28:26 pm
  * Modified By: hiimcody1
  * 
  * License: MIT License http://www.opensource.org/licenses/MIT
@@ -14,30 +14,47 @@
 
 class Util {
 
-    public static function DeferAndContinueExecution($hash,$retString=null) {
-        if($retString)
-            echo $retString;
-
-        file_put_contents(Config::TemporaryPath.$hash,json_encode(array("starttime"=>time(),"status"=>"waiting")));
-        
-        ignore_user_abort(true);
-        fastcgi_finish_request();
-
-        // Send HTTP headers
-        header('Content-Length: 0');
-        header('Connection: close');
-
-        // Clean up buffers
-        if(ob_get_level() > 0)
-        {
-                ob_end_clean();
-                ob_flush();
-        }
-        flush();
-        
+    public static function DeferAndContinueExecution($randomizer) {
+        file_put_contents(Config::TemporaryPath.$randomizer->hash,json_encode(array("starttime"=>time(),"status"=>"pregen","randomizer"=>serialize($randomizer))));
     }
 
-    public static function FinishBackgroundProcess($hash,$newHash=null,$markFail=false) {
+    public static function StartBackgroundProcess($hash) {
+        $batchProcess = Util::QueryBackgroundProcess($hash);
+        if($batchProcess["status"] == "pregen") {
+            
+            ignore_user_abort(true);
+            fastcgi_finish_request();
+
+            // Send HTTP headers
+            header('Content-Length: 0');
+            header('Connection: close');
+
+            // Clean up buffers
+            if(ob_get_level() > 0)
+            {
+                    ob_end_clean();
+                    ob_flush();
+            }
+            flush();
+            //*/
+            $randomizer = unserialize($batchProcess["randomizer"]);
+            file_put_contents(Config::TemporaryPath.$hash,json_encode(array("starttime"=>time(),"status"=>"waiting")));
+            
+            $db = new Database();
+            $seedSearch = $db->searchSeed($randomizer->seed,$randomizer->flags);
+            if($seedSearch) {
+                file_put_contents(Config::TemporaryPath.$hash,json_encode(array("starttime"=>time(),"status"=>"done","hash"=>$seedSearch->hash)));
+                return;
+            }
+            //*/
+            $seed = $randomizer->generate();
+            Util::FinishBackgroundProcess($randomizer->hash,$seed == null);
+        } else {
+            var_export($batchProcess);
+        }
+    }
+
+    public static function FinishBackgroundProcess($hash,$markFail=false) {
         if($markFail) {
             file_put_contents(Config::TemporaryPath.$hash,json_encode(array("status"=>"failed","hash"=>$hash)));
             return;
@@ -45,9 +62,8 @@ class Util {
         $status = file_get_contents(Config::TemporaryPath.$hash);
         if(Util::isJson($status)) {
             //Valid BG process
-            if(!$newHash)
-                $newHash=$hash;
-            file_put_contents(Config::TemporaryPath.$hash,json_encode(array("starttime"=>$status['starttime'],"status"=>"done","hash"=>$newHash)));
+            $status = json_decode($status,true);
+            file_put_contents(Config::TemporaryPath.$hash,json_encode(array("starttime"=>$status['starttime'],"status"=>"done","hash"=>$hash)));
         }
     }
 
@@ -65,5 +81,20 @@ class Util {
 
     public static function sanitizeHash($unsafeHash) {
         return preg_replace("/[^a-zA-Z0-9]+/", "",$unsafeHash);
+    }
+
+    public static function FatalError($error,$trace) {
+        if(Config::Debug)
+                die("{$error} <pre>" .  var_export($trace,true) . "</pre>");
+            else
+                die("{$error}");
+    }
+
+    public static function LogError($error,$trace) {
+        //TODO
+    }
+
+    public static function APIResponse($payload,$status=200) {
+        return json_encode(array("status"=>$status,"payload"=>$payload));
     }
 }

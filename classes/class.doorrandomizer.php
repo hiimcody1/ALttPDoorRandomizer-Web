@@ -4,13 +4,17 @@
  * File Created: Tuesday, 26th July 2022 7:39:17 pm
  * Author: hiimcody1
  * 
- * Last Modified: Thursday, 15th December 2022 3:41:54 pm
+ * Last Modified: Wednesday, 1st February 2023 3:40:46 pm
  * Modified By: hiimcody1
  * 
  * License: MIT License http://www.opensource.org/licenses/MIT
  */
 
 class DoorRandomizer {
+    readonly string     $flags;
+    readonly int        $seed;
+    readonly string     $hash;
+    public array        $meta;
     public array        $Options;
     public string       $BasePath;
 
@@ -21,11 +25,41 @@ class DoorRandomizer {
 
     public function Generate($Hash,$Options) {
         $Arguments = $this->setupArguments($Options);
-        $doorRando = $this->spawnDoorRandomizer($Arguments,$Hash);
-        if(Config::Debug) {
-            var_export($doorRando->Status());
-            $doorRando->ReadPipes();
+        $cd = getcwd();
+        chdir(Config::OutputDir);
+        $randomizer = $this->spawnDoorRandomizer($Arguments,$Hash);
+        $attempts=0;
+        $success=false;
+        while($attempts<Config::MaxGenAttempts && !$success) {
+            $randomizer->Start();
+            //TODO Adapt to DR output
+            $lines = explode("\n",$randomizer->GetOutput());
+            if(str_starts_with($lines[count($lines)-4],"Done")) {
+                if(file_exists(Config::OutputDir . "DR_" . $this->hash . ".bps")) {
+                    $success=true;
+                    $db = new Database();
+                    $seed = new DRSeed();
+                    $seed->hash = $this->hash;
+                    $seed->seed = $this->seed;
+                    $seed->build=Config::DoorsBranch;
+                    $seed->logic=Config::DoorsVersion;
+                    $seed->flags=$this->flags;
+                    $seed->meta=json_encode($this->meta);
+                    $seed->patch=file_get_contents(Config::OutputDir . "DR_" . $this->hash . ".bps");
+                    $db->storeSeed($seed);
+                    unlink(Config::OutputDir . "DR_" . $this->hash . ".bps");
+                }
+            }
+            $attempts++;
         }
+        chdir($cd);
+
+        if(!$success) {
+            Util::LogError("Failed to generate seed, please try again later!",array($this));
+            return null;
+        }
+        
+        return $seed;
     }
 
     private function initTypesFromDoors() {
@@ -220,6 +254,14 @@ class DoorRandomizer {
         return $arguments;
     }
 
+    private function remapGUITabOptions($Tabs) {
+        return array_map(function($tab) {
+            return array(
+
+            );
+        }, $Tabs);
+    }
+
     private function spawnDoorRandomizer($Arguments,$OutputFilename,$Limit=10,$Background=false) {
         $Arguments[] = "--outputname {$OutputFilename}";
         $Arguments[] = "\n";
@@ -304,13 +346,13 @@ class DoorRandomizerOption {
                 <option value=1>Yes</option>
                 </select>
                 <div data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" data-bs-title="<small>'.str_replace(array("\n","\""),array("<br />","'"),$this->Description).'</small>"><small>?</small></div></div>';
-              break;
+                break;
             case "string":
                 $html = '<div class="input-group mb-3">
                 <span class="input-group-text" id="label-'.$this->Type.$this->Name.'">'.ucfirst($this->Name).'</span>
                 <input type="text" class="form-control" id="'.$this->Type.$this->Name.'" placeholder="'.$this->DefaultValue.'" aria-describedby="label-'.$this->Type.$this->Name.'">
                 <div data-bs-toggle="tooltip" data-bs-html="true" data-bs-placement="bottom" data-bs-title="<small>'.str_replace(array("\n","\""),array("<br />","'"),$this->Description).'</small>"><small>?</small></div></div>';
-              break;
+                break;
             default:
                 
         }
